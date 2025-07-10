@@ -1,0 +1,23 @@
+{
+  "name": "estat-jp",
+  "version": "1.0.0",
+  "description": "A server to fetch data from eSTAT Japan daily.",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "fetch": "ts-node src/index.ts",
+    "fetch:watch": "ts-node --watch src/index.ts"
+  },
+  "keywords": ["nodejs", "typescript", "estat", "data-fetcher"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "axios": "^1.6.0"
+  }
+} 
