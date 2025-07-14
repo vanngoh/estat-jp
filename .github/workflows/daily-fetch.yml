@@ -1,0 +1,49 @@
+name: Daily Data Fetch
+
+on:
+  schedule:
+    # Run daily at 00:00 UTC (9:00 AM JST)
+    - cron: '0 0 * * *'
+  workflow_dispatch: # Allow manual triggering
+
+permissions:
+  contents: write # Allow writing to repository
+
+jobs:
+  fetch-data:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Build TypeScript
+      run: npm run build
+      
+    - name: Fetch data from eSTAT Japan
+      env:
+        ESTAT_APP_ID: ${{ secrets.ESTAT_APP_ID }}
+      run: npm run fetch
+      
+    - name: Commit and push changes
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        git add json/
+        if git diff --staged --quiet; then
+          echo "No changes to commit"
+        else
+          git commit -m "Update data from eSTAT Japan API [skip ci]"
+          git push
+        fi 
