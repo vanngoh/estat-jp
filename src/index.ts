@@ -140,6 +140,11 @@ function cleanEstatData(rawData: EstatResponse): CleanedData {
   return cleanedData;
 }
 
+function isDataDifferent(newData: CleanedData, existingData: CleanedData): boolean {
+  // Compare only the data field, ignoring updatedAt
+  return JSON.stringify(newData.data) !== JSON.stringify(existingData.data);
+}
+
 async function fetchEstatPermanentResidenceData(): Promise<void> {
   try {
     console.log('🔄 Fetching data from eSTAT Japan API...');
@@ -148,7 +153,7 @@ async function fetchEstatPermanentResidenceData(): Promise<void> {
       cdCat01: '100000,102000,103000,300000',
       cdCat02: 60,
       cdCat03: 101170,
-      appId: process.env.ESTAT_APP_ID, // Read fromGitHub Secret
+      appId: process.env.ESTAT_APP_ID, // Read from GitHub Secret
       lang: 'J',
       statsDataId: '0003449073',
       metaGetFlg: 'Y',
@@ -174,16 +179,40 @@ async function fetchEstatPermanentResidenceData(): Promise<void> {
       fs.mkdirSync(OUTPUT_DIR, { recursive: true });
     }
 
-    // Save the cleaned data to pr.json
+    // Check if file exists and compare data
     const filepath = path.join(OUTPUT_DIR, 'pr.json');
-    
-    fs.writeFileSync(filepath, JSON.stringify(cleanedData, null, 2));
-    
-    console.log(`✅ Data successfully fetched, cleaned, and saved to: ${filepath}`);
-    console.log(`📊 API Response Status: ${response.data.GET_STATS_DATA.RESULT.STATUS}`);
-    console.log(`📅 Data Date: ${cleanedData.updatedAt}`);
-    console.log(`📈 Data points: ${Object.keys(cleanedData.data).length} time periods`);
-    console.log(`📋 Categories: ${Object.keys(cleanedData.data[Object.keys(cleanedData.data)[0]]?.categories || {}).length} categories per period`);
+    let shouldUpdate = true;
+    let existingData: CleanedData | null = null;
+
+    if (fs.existsSync(filepath)) {
+      try {
+        const existingContent = fs.readFileSync(filepath, 'utf8');
+        existingData = JSON.parse(existingContent);
+        
+        // Compare data content (ignoring updatedAt)
+        if (existingData && !isDataDifferent(cleanedData, existingData)) {
+          console.log('📊 Data content is identical, skipping update');
+          console.log(`📅 Current updatedAt: ${existingData.updatedAt}`);
+          console.log(`📅 New updatedAt: ${cleanedData.updatedAt}`);
+          shouldUpdate = false;
+        } else {
+          console.log('📊 Data content has changed, updating file');
+        }
+      } catch (error) {
+        console.warn('⚠️ Error reading existing file, will create new one:', error);
+      }
+    }
+
+    if (shouldUpdate) {
+      // Save the cleaned data to pr.json
+      fs.writeFileSync(filepath, JSON.stringify(cleanedData, null, 2));
+      
+      console.log(`✅ Data successfully saved to: ${filepath}`);
+      console.log(`📊 API Response Status: ${response.data.GET_STATS_DATA.RESULT.STATUS}`);
+      console.log(`📅 Data Date: ${cleanedData.updatedAt}`);
+      console.log(`📈 Data points: ${Object.keys(cleanedData.data).length} time periods`);
+      console.log(`📋 Categories: ${Object.keys(cleanedData.data[Object.keys(cleanedData.data)[0]]?.categories || {}).length} categories per period`);
+    }
     
   } catch (error) {
     console.error('❌ Error fetching data:', error);
@@ -196,4 +225,4 @@ if (require.main === module) {
   fetchEstatPermanentResidenceData();
 }
 
-export { fetchEstatPermanentResidenceData, cleanEstatData }; 
+export { fetchEstatPermanentResidenceData, cleanEstatData, isDataDifferent }; 
