@@ -241,16 +241,17 @@ async function fetchEstatPermanentResidenceData(): Promise<void> {
     // Track which branches are processed (not skipped)
     const processedBranches: Array<{ branchCode: string; branchName: string }> = [];
 
+    // Skip branches listed in excludedBranches
+    const excludedBranches = new Set([
+      '100000', // 総数
+      '101190', // 成田空港支局
+      '101200', // 羽田空港支局
+      '101370', // 中部空港支局
+      '101480'  // 関西空港支局
+    ]);
+
     // Process each branch separately
     for (const [branchCode, branchInfo] of Object.entries(cleanedData.branches)) {
-      // Skip branches listed in excludedBranches
-      const excludedBranches = new Set([
-        '100000', // 総数
-        '101190', // 成田空港支局
-        '101200', // 羽田空港支局
-        '101370', // 中部空港支局
-        '101480'  // 関西空港支局
-      ]);
       if (excludedBranches.has(branchCode)) {
         console.log(`⏭ Skipping branch ${branchCode} (${branchInfo.name})`);
         continue;
@@ -309,7 +310,7 @@ async function fetchEstatPermanentResidenceData(): Promise<void> {
     console.log(`   ✓ Created: ${createdCount}`);
     console.log(`   ↻ Updated: ${updatedCount}`);
     console.log(`   - Skipped: ${skippedCount}`);
-    console.log(`   ⏭ Ignored: 5 branches (100000, 101190, 101200, 101370, 101480)`);
+    console.log(`   ⏭ Ignored: ${excludedBranches.size} branches (${Array.from(excludedBranches).join(', ')})`);
     
   } catch (error) {
     console.error('❌ Error fetching data:', error);
