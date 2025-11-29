@@ -238,6 +238,9 @@ async function fetchEstatPermanentResidenceData(): Promise<void> {
     let skippedCount = 0;
     let createdCount = 0;
 
+    // Track which branches are processed (not skipped)
+    const processedBranches: Array<{ branchCode: string; branchName: string }> = [];
+
     // Process each branch separately
     for (const [branchCode, branchInfo] of Object.entries(cleanedData.branches)) {
       // Skip branches "100000" (総数), 
@@ -255,6 +258,12 @@ async function fetchEstatPermanentResidenceData(): Promise<void> {
         console.log(`⏭ Skipping branch ${branchCode} (${branchInfo.name})`);
         continue;
       }
+
+      // Add to processed branches list
+      processedBranches.push({
+        branchCode,
+        branchName: branchInfo.name
+      });
 
       const branchData: BranchData = {
         updatedAt: cleanedData.updatedAt,
@@ -293,11 +302,17 @@ async function fetchEstatPermanentResidenceData(): Promise<void> {
       }
     }
 
+    // Create branches list with only processed branches
+    const branchesList = processedBranches.sort((a, b) => a.branchCode.localeCompare(b.branchCode));
+    const listFilepath = path.join(BRANCHES_DIR, 'list.json');
+    fs.writeFileSync(listFilepath, JSON.stringify(branchesList, null, 2));
+    console.log(`\n📋 Created branches list: ${listFilepath} (${branchesList.length} branches)`);
+
     console.log(`\n📊 Summary:`);
     console.log(`   ✓ Created: ${createdCount}`);
     console.log(`   ↻ Updated: ${updatedCount}`);
     console.log(`   - Skipped: ${skippedCount}`);
-    console.log(`   ⏭ Ignored: 1 (branch 100000)`);
+    console.log(`   ⏭ Ignored: 5 branches (100000, 101190, 101200, 101370, 101480)`);
     
   } catch (error) {
     console.error('❌ Error fetching data:', error);
