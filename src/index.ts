@@ -59,14 +59,20 @@ interface EstatResponse {
 
 interface CleanedData {
   updatedAt: string;
-  data: {
-    [time: string]: {
-      timeName: string;
-      categories: {
-        [cat01: string]: {
-          value: string;
-          unit: string;
-          name: string;
+  branches: {
+    [branchCode: string]: {
+      name: string;
+      code: string;
+      data: {
+        [time: string]: {
+          timeName: string;
+          categories: {
+            [cat01: string]: {
+              value: string;
+              unit: string;
+              name: string;
+            };
+          };
         };
       };
     };
@@ -92,8 +98,9 @@ function cleanEstatData(rawData: EstatResponse): CleanedData {
   // Create lookup maps for names
   const timeNameMap = new Map<string, string>();
   const cat01NameMap = new Map<string, string>();
+  const cat03NameMap = new Map<string, string>();
   
-  // Extract time and cat01 names from CLASS_INF
+  // Extract time, cat01, and cat03 names from CLASS_INF
   classInf.forEach(classObj => {
     if (classObj['@id'] === 'time') {
       const timeClasses = Array.isArray(classObj.CLASS) ? classObj.CLASS : [classObj.CLASS];
@@ -105,32 +112,51 @@ function cleanEstatData(rawData: EstatResponse): CleanedData {
       cat01Classes.forEach(cat01Class => {
         cat01NameMap.set(cat01Class['@code'], cat01Class['@name']);
       });
+    } else if (classObj['@id'] === 'cat03') {
+      const cat03Classes = Array.isArray(classObj.CLASS) ? classObj.CLASS : [classObj.CLASS];
+      cat03Classes.forEach(cat03Class => {
+        cat03NameMap.set(cat03Class['@code'], cat03Class['@name']);
+      });
     }
   });
   
   const cleanedData: CleanedData = {
     updatedAt,
-    data: {}
+    branches: {}
   };
 
-  // Group data by @time and filter by @cat01
+  // Group data by branch (@cat03), then by time, then by category (@cat01)
   valueData.forEach(item => {
     const originalTime = item['@time'];
     const time = convertTimeKey(originalTime); // Convert to YYYY-MM format
     const cat01 = item['@cat01'];
+    const cat03 = item['@cat03'];
     const value = item['$'];
     const unit = item['@unit'];
     
     const timeName = timeNameMap.get(originalTime) || originalTime;
     const cat01Name = cat01NameMap.get(cat01) || cat01;
+    const cat03Name = cat03NameMap.get(cat03) || cat03;
 
-    if (!cleanedData.data[time]) {
-      cleanedData.data[time] = {
+    // Initialize branch if not exists
+    if (!cleanedData.branches[cat03]) {
+      cleanedData.branches[cat03] = {
+        name: cat03Name,
+        code: cat03,
+        data: {}
+      };
+    }
+
+    // Initialize time period if not exists
+    if (!cleanedData.branches[cat03].data[time]) {
+      cleanedData.branches[cat03].data[time] = {
         timeName,
         categories: {}
       };
     }
-    cleanedData.data[time].categories[cat01] = {
+
+    // Add category data
+    cleanedData.branches[cat03].data[time].categories[cat01] = {
       value,
       unit,
       name: cat01Name
@@ -141,8 +167,8 @@ function cleanEstatData(rawData: EstatResponse): CleanedData {
 }
 
 function isDataDifferent(newData: CleanedData, existingData: CleanedData): boolean {
-  // Compare only the data field, ignoring updatedAt
-  return JSON.stringify(newData.data) !== JSON.stringify(existingData.data);
+  // Compare only the branches field, ignoring updatedAt
+  return JSON.stringify(newData.branches) !== JSON.stringify(existingData.branches);
 }
 
 async function fetchEstatPermanentResidenceData(): Promise<void> {
@@ -152,7 +178,7 @@ async function fetchEstatPermanentResidenceData(): Promise<void> {
     const params = {
       cdCat01: '100000,102000,103000,300000',
       cdCat02: 60,
-      cdCat03: 101170,
+      // cdCat03: 101170, // To fetch all branches, do not set this filter
       appId: process.env.ESTAT_APP_ID, // Read from GitHub Secret
       lang: 'J',
       statsDataId: '0003449073',
@@ -180,7 +206,7 @@ async function fetchEstatPermanentResidenceData(): Promise<void> {
     }
 
     // Check if file exists and compare data
-    const filepath = path.join(OUTPUT_DIR, 'pr.json');
+    const filepath = path.join(OUTPUT_DIR, 'whole-jp.json');
     let shouldUpdate = true;
     let existingData: CleanedData | null = null;
 
@@ -210,8 +236,13 @@ async function fetchEstatPermanentResidenceData(): Promise<void> {
       console.log(`✅ Data successfully saved to: ${filepath}`);
       console.log(`📊 API Response Status: ${response.data.GET_STATS_DATA.RESULT.STATUS}`);
       console.log(`📅 Data Date: ${cleanedData.updatedAt}`);
-      console.log(`📈 Data points: ${Object.keys(cleanedData.data).length} time periods`);
-      console.log(`📋 Categories: ${Object.keys(cleanedData.data[Object.keys(cleanedData.data)[0]]?.categories || {}).length} categories per period`);
+      console.log(`🏢 Branches: ${Object.keys(cleanedData.branches).length}`);
+      
+      const firstBranch = cleanedData.branches[Object.keys(cleanedData.branches)[0]];
+      if (firstBranch) {
+        console.log(`📈 Time periods: ${Object.keys(firstBranch.data).length}`);
+        console.log(`📋 Categories: ${Object.keys(firstBranch.data[Object.keys(firstBranch.data)[0]]?.categories || {}).length} per period`);
+      }
     }
     
   } catch (error) {
