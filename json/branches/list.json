@@ -1,0 +1,46 @@
+[
+  {
+    "branchCode": "101010",
+    "branchName": "札幌出入国在留管理局管内"
+  },
+  {
+    "branchCode": "101090",
+    "branchName": "仙台出入国在留管理局管内"
+  },
+  {
+    "branchCode": "101170",
+    "branchName": "東京出入国在留管理局管内"
+  },
+  {
+    "branchCode": "101210",
+    "branchName": "横浜支局"
+  },
+  {
+    "branchCode": "101350",
+    "branchName": "名古屋出入国在留管理局管内"
+  },
+  {
+    "branchCode": "101460",
+    "branchName": "大阪出入国在留管理局管内"
+  },
+  {
+    "branchCode": "101490",
+    "branchName": "神戸支局"
+  },
+  {
+    "branchCode": "101580",
+    "branchName": "広島出入国在留管理局管内"
+  },
+  {
+    "branchCode": "101670",
+    "branchName": "高松出入国在留管理局管内"
+  },
+  {
+    "branchCode": "101720",
+    "branchName": "福岡出入国在留管理局管内"
+  },
+  {
+    "branchCode": "101740",
+    "branchName": "那覇支局"
+  }
+]
