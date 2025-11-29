@@ -243,18 +243,15 @@ async function fetchEstatPermanentResidenceData(): Promise<void> {
 
     // Process each branch separately
     for (const [branchCode, branchInfo] of Object.entries(cleanedData.branches)) {
-      // Skip branches "100000" (総数), 
-      // "101190" (成田空港支局), 
-      // "101200" (羽田空港支局), 
-      // "101370" (中部空港支局), 
-      // "101480" (関西空港支局)
-      if (
-        branchCode === '100000' || 
-        branchCode === '101190' || 
-        branchCode === '101200' || 
-        branchCode === '101370' || 
-        branchCode === '101480'
-      ) {
+      // Skip branches listed in excludedBranches
+      const excludedBranches = new Set([
+        '100000', // 総数
+        '101190', // 成田空港支局
+        '101200', // 羽田空港支局
+        '101370', // 中部空港支局
+        '101480'  // 関西空港支局
+      ]);
+      if (excludedBranches.has(branchCode)) {
         console.log(`⏭ Skipping branch ${branchCode} (${branchInfo.name})`);
         continue;
       }
