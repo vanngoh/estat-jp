@@ -1,6 +1,7 @@
 import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
+import 'dotenv/config';
 
 interface EstatResponse {
   GET_STATS_DATA: {
@@ -81,6 +82,7 @@ interface CleanedData {
 
 const ESTAT_API_URL = 'http://api.e-stat.go.jp/rest/3.0/app/json/getStatsData';
 const OUTPUT_DIR = './json';
+const BRANCHES_DIR = './json/branches';
 
 function convertTimeKey(timeKey: string): string {
   // Convert from YYYY00MMDD format to YYYY-MM
@@ -171,6 +173,29 @@ function isDataDifferent(newData: CleanedData, existingData: CleanedData): boole
   return JSON.stringify(newData.branches) !== JSON.stringify(existingData.branches);
 }
 
+interface BranchData {
+  updatedAt: string;
+  branchCode: string;
+  branchName: string;
+  data: {
+    [time: string]: {
+      timeName: string;
+      categories: {
+        [cat01: string]: {
+          value: string;
+          unit: string;
+          name: string;
+        };
+      };
+    };
+  };
+}
+
+function isBranchDataDifferent(newData: BranchData, existingData: BranchData): boolean {
+  // Compare only the data field, ignoring updatedAt
+  return JSON.stringify(newData.data) !== JSON.stringify(existingData.data);
+}
+
 async function fetchEstatPermanentResidenceData(): Promise<void> {
   try {
     console.log('🔄 Fetching data from eSTAT Japan API...');
@@ -200,50 +225,92 @@ async function fetchEstatPermanentResidenceData(): Promise<void> {
     // Clean up the data
     const cleanedData = cleanEstatData(response.data);
 
-    // Create output directory if it doesn't exist
-    if (!fs.existsSync(OUTPUT_DIR)) {
-      fs.mkdirSync(OUTPUT_DIR, { recursive: true });
+    // Create output directories if they don't exist
+    if (!fs.existsSync(BRANCHES_DIR)) {
+      fs.mkdirSync(BRANCHES_DIR, { recursive: true });
     }
 
-    // Check if file exists and compare data
-    const filepath = path.join(OUTPUT_DIR, 'whole-jp.json');
-    let shouldUpdate = true;
-    let existingData: CleanedData | null = null;
+    console.log(`📊 API Response Status: ${response.data.GET_STATS_DATA.RESULT.STATUS}`);
+    console.log(`📅 Data Date: ${cleanedData.updatedAt}`);
+    console.log(`🏢 Total Branches: ${Object.keys(cleanedData.branches).length}`);
 
-    if (fs.existsSync(filepath)) {
-      try {
-        const existingContent = fs.readFileSync(filepath, 'utf8');
-        existingData = JSON.parse(existingContent);
-        
-        // Compare data content (ignoring updatedAt)
-        if (existingData && !isDataDifferent(cleanedData, existingData)) {
-          console.log('📊 Data content is identical, skipping update');
-          console.log(`📅 Current updatedAt: ${existingData.updatedAt}`);
-          console.log(`📅 New updatedAt: ${cleanedData.updatedAt}`);
-          shouldUpdate = false;
-        } else {
-          console.log('📊 Data content has changed, updating file');
+    let updatedCount = 0;
+    let skippedCount = 0;
+    let createdCount = 0;
+
+    // Track which branches are processed (not skipped)
+    const processedBranches: Array<{ branchCode: string; branchName: string }> = [];
+
+    // Skip branches listed in excludedBranches
+    const excludedBranches = new Set([
+      '100000', // 総数
+      '101190', // 成田空港支局
+      '101200', // 羽田空港支局
+      '101370', // 中部空港支局
+      '101480'  // 関西空港支局
+    ]);
+
+    // Process each branch separately
+    for (const [branchCode, branchInfo] of Object.entries(cleanedData.branches)) {
+      if (excludedBranches.has(branchCode)) {
+        console.log(`⏭ Skipping branch ${branchCode} (${branchInfo.name})`);
+        continue;
+      }
+
+      // Add to processed branches list
+      processedBranches.push({
+        branchCode,
+        branchName: branchInfo.name
+      });
+
+      const branchData: BranchData = {
+        updatedAt: cleanedData.updatedAt,
+        branchCode: branchInfo.code,
+        branchName: branchInfo.name,
+        data: branchInfo.data
+      };
+
+      const branchFilepath = path.join(BRANCHES_DIR, `${branchCode}.json`);
+      let shouldUpdate = true;
+
+      if (fs.existsSync(branchFilepath)) {
+        try {
+          const existingContent = fs.readFileSync(branchFilepath, 'utf8');
+          const existingData: BranchData = JSON.parse(existingContent);
+          
+          // Compare data content (ignoring updatedAt)
+          if (!isBranchDataDifferent(branchData, existingData)) {
+            console.log(`✓ ${branchCode} (${branchInfo.name}): No changes`);
+            skippedCount++;
+            shouldUpdate = false;
+          } else {
+            console.log(`↻ ${branchCode} (${branchInfo.name}): Data changed, updating`);
+            updatedCount++;
+          }
+        } catch (error) {
+          console.warn(`⚠️  ${branchCode}: Error reading file, will recreate:`, error);
         }
-      } catch (error) {
-        console.warn('⚠️ Error reading existing file, will create new one:', error);
+      } else {
+        console.log(`+ ${branchCode} (${branchInfo.name}): Creating new file`);
+        createdCount++;
+      }
+
+      if (shouldUpdate) {
+        fs.writeFileSync(branchFilepath, JSON.stringify(branchData, null, 2));
       }
     }
 
-    if (shouldUpdate) {
-      // Save the cleaned data to pr.json
-      fs.writeFileSync(filepath, JSON.stringify(cleanedData, null, 2));
-      
-      console.log(`✅ Data successfully saved to: ${filepath}`);
-      console.log(`📊 API Response Status: ${response.data.GET_STATS_DATA.RESULT.STATUS}`);
-      console.log(`📅 Data Date: ${cleanedData.updatedAt}`);
-      console.log(`🏢 Branches: ${Object.keys(cleanedData.branches).length}`);
-      
-      const firstBranch = cleanedData.branches[Object.keys(cleanedData.branches)[0]];
-      if (firstBranch) {
-        console.log(`📈 Time periods: ${Object.keys(firstBranch.data).length}`);
-        console.log(`📋 Categories: ${Object.keys(firstBranch.data[Object.keys(firstBranch.data)[0]]?.categories || {}).length} per period`);
-      }
-    }
+    // Create branches list with only processed branches
+    const branchesList = processedBranches.sort((a, b) => a.branchCode.localeCompare(b.branchCode));
+    const listFilepath = path.join(BRANCHES_DIR, 'list.json');
+    fs.writeFileSync(listFilepath, JSON.stringify(branchesList, null, 2));
+    console.log(`\n📋 Created branches list: ${listFilepath} (${branchesList.length} branches)`);
+
+    console.log(`\n📊 Summary:`);
+    console.log(`   ✓ Created: ${createdCount}`);
+    console.log(`   ↻ Updated: ${updatedCount}`);
+    console.log(`   - Skipped: ${skippedCount}`);
+    console.log(`   ⏭ Ignored: ${excludedBranches.size} branches (${Array.from(excludedBranches).join(', ')})`);
     
   } catch (error) {
     console.error('❌ Error fetching data:', error);
