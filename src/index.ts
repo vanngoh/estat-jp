@@ -240,9 +240,19 @@ async function fetchEstatPermanentResidenceData(): Promise<void> {
 
     // Process each branch separately
     for (const [branchCode, branchInfo] of Object.entries(cleanedData.branches)) {
-      // Skip branch "100000"
-      if (branchCode === '100000') {
-        console.log(`⏭️  Skipping branch ${branchCode} (${branchInfo.name})`);
+      // Skip branches "100000" (総数), 
+      // "101190" (成田空港支局), 
+      // "101200" (羽田空港支局), 
+      // "101370" (中部空港支局), 
+      // "101480" (関西空港支局)
+      if (
+        branchCode === '100000' || 
+        branchCode === '101190' || 
+        branchCode === '101200' || 
+        branchCode === '101370' || 
+        branchCode === '101480'
+      ) {
+        console.log(`⏭ Skipping branch ${branchCode} (${branchInfo.name})`);
         continue;
       }
 
